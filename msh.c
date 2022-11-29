@@ -8,8 +8,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define FALSE 0
-#define TRUE 1
+#define FALSE   0
+#define TRUE    1
 
 #define EOL	1
 #define ARG	2
@@ -47,6 +47,121 @@ int get_token(char** outptr) {
     *tok++ = '\0';
 
     return type;
+}
+
+#define TOKEN_TYPE_NONE                 0
+#define TOKEN_TYPE_AMPERSAND            1
+#define TOKEN_TYPE_LEFT_ANGLE_BRACKET   2
+#define TOKEN_TYPE_RIGHT_ANGLE_BRACKET  3
+#define TOKEN_TYPE_DLEFT_ANGLE_BRACKET  4
+#define TOKEN_TYPE_DRIGHT_ANGLE_BRACKET 5
+
+typedef struct Tokenizer {
+    char* token;
+    int index;
+    int type;
+    int _last;
+    char* _ptr;
+} Tokenizer;
+
+int _is_token_seperator(char ch) {
+    switch (ch) {
+        case ' ':
+        case '\t':
+        case '\n':
+            return TRUE;
+    }
+    return FALSE;
+}
+
+int init_tokenizer(Tokenizer* tk, char* target) {
+    // initialize fields
+    tk->token = NULL;
+    tk->index = -1;
+    tk->type = TOKEN_TYPE_NONE;
+
+    // get effective start position of token
+    while (_is_token_seperator(*target)) {
+        target++;
+    };
+    tk->_ptr = target;
+
+    // if first token is null charactor, set _last field TRUE
+    tk->_last = FALSE;
+    if (*tk->_ptr == '\0') {
+        tk->_last = TRUE;
+    }
+}
+
+int _get_token_type(char* ch) {
+    int type = TOKEN_TYPE_NONE;
+
+    switch (*ch) {
+        case '<': type = TOKEN_TYPE_LEFT_ANGLE_BRACKET; break;
+        case '>': type = TOKEN_TYPE_RIGHT_ANGLE_BRACKET; break;
+        case '&': type = TOKEN_TYPE_AMPERSAND; break;
+    }
+
+    if (*(++ch) == '\0') {
+        return type;
+    }
+
+    switch (*ch) {
+        case '<':
+            if (type == TOKEN_TYPE_LEFT_ANGLE_BRACKET) {
+                type = TOKEN_TYPE_DLEFT_ANGLE_BRACKET;
+            } else {
+                type = TOKEN_TYPE_NONE;
+            }
+            break;
+        case '>':
+            if (type == TOKEN_TYPE_RIGHT_ANGLE_BRACKET) {
+                type = TOKEN_TYPE_DRIGHT_ANGLE_BRACKET;
+            } else {
+                type = TOKEN_TYPE_NONE;
+            }
+            break;
+    }
+
+    return type;
+}
+
+int get_next_token(Tokenizer* tk) {
+    char* ptr = tk->_ptr;
+    
+    // if there is no next token return 0
+    if (tk->_last == TRUE) {
+        return 0;
+    }
+
+    // set start position of token
+    tk->token = ptr;
+    
+    // get end position of token
+    while (!_is_token_seperator(*ptr)) {
+        if (*ptr == '\0') {
+            tk->_last = TRUE;
+            break;
+        }
+        ptr++;
+    }
+
+    *(ptr++) = '\0'; // separate from other tokens
+    tk->type = _get_token_type(tk->token); // get token type
+    tk->index++; // increase index
+
+    // get effective start position of next token
+    if (tk->_last == FALSE) {
+        while (_is_token_seperator(*ptr)) {
+            ptr++;
+        }
+        if (*ptr == '\0') {
+            tk->_last = TRUE;
+        }
+    }
+    tk->_ptr = ptr;
+
+    return 1;
 }
 
 int execute(char **comm, int how, int redirection) {
@@ -140,8 +255,6 @@ int parse_and_execute(char* input)
 
 int main(void)
 {
-    int	quit_sig;
-
     printf("msh # ");
     while (fgets(input, INPUT_SIZE, stdin)) {
         for (int i = 0; i < INPUT_SIZE; i++) {
@@ -150,13 +263,10 @@ int main(void)
                 break;
             }
         }
-
-        quit_sig = parse_and_execute(input);
-        if (quit_sig) {
+        if (parse_and_execute(input)) {
             break;
         }
         printf("msh # ");
     }
-
     return 0;
 }
