@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <readline/readline.h>
 
 #define FALSE   0
 #define TRUE    1
@@ -21,8 +22,6 @@
 #define TOKEN_TYPE_RIGHT_ANGLE_BRACKET  3
 #define TOKEN_TYPE_DRIGHT_ANGLE_BRACKET 4
 #define TOKEN_TYPE_PIPE                 5
-
-#define SWAP(X, Y, TMP) ((TMP) = (X), (X) = (Y), (Y) = (TMP))
 
 typedef struct Tokenizer {
     char* token;
@@ -167,7 +166,7 @@ int execute(char** argv, int how, int red) {
             close(red_fd);
         }
         execvp(*argv, argv);
-        fprintf(stderr, "msh: command not found\n");
+        fprintf(stderr, "error: command not found\n");
         exit(127);
     }
 
@@ -250,14 +249,15 @@ int interpret(char* input) {
 
 int main(void)
 {
-    char input[INPUT_SIZE];
+    char* buffer = "";
 
-    printf("lsh # ");
-    while (fgets(input, INPUT_SIZE, stdin)) {
-        if (interpret(input)) {
+    while (buffer) {
+        buffer = readline("lsh # ");
+        if (interpret(buffer)) {
             break;
         }
-        printf("lsh # ");
+        free(buffer);
     }
+
     return 0;
 }
