@@ -189,9 +189,21 @@ int command(char** argv, int argc) {
     } else if (CMD("quit")) {
         exit(0);
     } else if (CMD("cd")) {
-        fprintf(stderr, "TODO: implement change directory. \n");
+        // https://stackoverflow.com/questions/4998530/can-chdir-accept-relative-paths
+        if (chdir(argv[1]) < 0) {
+            perror("error");
+        }
     } else if (CMD("type")) {
-        fprintf(stderr, "TODO: implement text read command. \n");
+        FILE* fp;
+        char buf[100];
+        if ((fp = fopen(argv[1], "r")) != NULL) {
+            while (fgets(buf, 100, fp)) {
+                fputs(buf, stdout);
+            }
+            fclose(fp);
+        } else {
+            perror("error");
+        }
     } else {
         return 1; // external command
     }
