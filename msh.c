@@ -19,9 +19,10 @@
 #define TOKEN_TYPE_AMPERSAND            1
 #define TOKEN_TYPE_LEFT_ANGLE_BRACKET   2
 #define TOKEN_TYPE_RIGHT_ANGLE_BRACKET  3
-#define TOKEN_TYPE_DLEFT_ANGLE_BRACKET  4
-#define TOKEN_TYPE_DRIGHT_ANGLE_BRACKET 5
-#define TOKEN_TYPE_PIPE                 6
+#define TOKEN_TYPE_DRIGHT_ANGLE_BRACKET 4
+#define TOKEN_TYPE_PIPE                 5
+
+#define SWAP(X, Y, TMP) ((TMP) = (X), (X) = (Y), (Y) = (TMP))
 
 typedef struct Tokenizer {
     char* token;
@@ -75,13 +76,6 @@ int _get_token_type(char* ch) {
     }
 
     switch (*ch) {
-        case '<':
-            if (type == TOKEN_TYPE_LEFT_ANGLE_BRACKET) {
-                type = TOKEN_TYPE_DLEFT_ANGLE_BRACKET;
-            } else {
-                type = TOKEN_TYPE_NONE;
-            }
-            break;
         case '>':
             if (type == TOKEN_TYPE_RIGHT_ANGLE_BRACKET) {
                 type = TOKEN_TYPE_DRIGHT_ANGLE_BRACKET;
@@ -136,14 +130,31 @@ int is_token_last(Tokenizer* tk) {
     return tk->_last;
 }
 
-int execute(char** argv, int how, int type) {
+int execute(char** argv, int how, int red) {
     pid_t pid;
     char** argv2;
+    int red_fd;
 
-    if (type) {
+    // redirection
+    if (red) {
         // get start address of arguments for redirection or pipe
         for (argv2 = argv; *argv2 != (char*)0; argv2++);
         argv2++;
+
+        // get fd
+        int oflag = 0;
+        switch (red) {
+        case TOKEN_TYPE_RIGHT_ANGLE_BRACKET:
+            oflag |= O_WRONLY | O_CREAT | O_TRUNC; break;
+        case TOKEN_TYPE_DRIGHT_ANGLE_BRACKET:
+            oflag |= O_WRONLY | O_CREAT | O_APPEND; break;
+        case TOKEN_TYPE_LEFT_ANGLE_BRACKET:
+            oflag |= O_RDONLY; break;
+        }
+        if ((red_fd = open(argv2[0], oflag, 0664)) < 0) {
+            perror("error");
+            return -1;
+        }
     }
 
     if ((pid = fork()) < 0) {
@@ -151,10 +162,9 @@ int execute(char** argv, int how, int type) {
         return -1;
     } else if (pid == 0) {
         /* child process */
-        if (type == TOKEN_TYPE_RIGHT_ANGLE_BRACKET) {
-            int fd = open(*argv2, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-            dup2(fd, 1);
-            close(fd);
+        if (red) { // duplicate red_fd to stdout or stdin
+            (red == TOKEN_TYPE_LEFT_ANGLE_BRACKET) ? dup2(red_fd, 0) : dup2(red_fd, 1);
+            close(red_fd);
         }
         execvp(*argv, argv);
         fprintf(stderr, "msh: command not found\n");
@@ -211,7 +221,6 @@ int interpret(char* input) {
         case TOKEN_TYPE_RIGHT_ANGLE_BRACKET:
         case TOKEN_TYPE_DRIGHT_ANGLE_BRACKET:
         case TOKEN_TYPE_LEFT_ANGLE_BRACKET:
-        case TOKEN_TYPE_DLEFT_ANGLE_BRACKET:
             red = tk.type;
             while (get_next_token(&tk) == TOKEN_TYPE_NONE) {
                 argv[argc++] = tk.token;
