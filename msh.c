@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
 
@@ -100,7 +99,7 @@ int get_next_token(Tokenizer* tk) {
     
     // if there is no next token return 0
     if (tk->_last == TRUE) {
-        return 0;
+        return -1;
     }
 
     // set start position of token
@@ -130,21 +129,33 @@ int get_next_token(Tokenizer* tk) {
     }
     tk->_ptr = ptr;
 
-    return 1;
+    return tk->type;
 }
 
 int is_token_last(Tokenizer* tk) {
     return tk->_last;
 }
 
-int execute(char **argv, int how) {
-    int	pid;
+int execute(char** argv, int how, int type) {
+    pid_t pid;
+    char** argv2;
+
+    if (type) {
+        // get start address of arguments for redirection or pipe
+        for (argv2 = argv; *argv2 != (char*)0; argv2++);
+        argv2++;
+    }
 
     if ((pid = fork()) < 0) {
         perror("fork error");
         return -1;
     } else if (pid == 0) {
         /* child process */
+        if (type == TOKEN_TYPE_RIGHT_ANGLE_BRACKET) {
+            int fd = open(*argv2, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+            dup2(fd, 1);
+            close(fd);
+        }
         execvp(*argv, argv);
         fprintf(stderr, "msh: command not found\n");
         exit(127);
@@ -187,20 +198,30 @@ int interpret(char* input) {
     char* argv[1024];
     int argc = 0;
     int how = HOW_FOREGROUND;
+    int red = 0;
 
-    while (get_next_token(&tk)) {
-        if (tk.type != TOKEN_TYPE_NONE) break;
+    while (get_next_token(&tk) == TOKEN_TYPE_NONE) {
         argv[argc++] = tk.token;
     }
-    argv[argc] = (char*)0;
+    argv[argc++] = (char*)0;
 
     switch (tk.type) {
         case TOKEN_TYPE_AMPERSAND:
             how = HOW_BACKGROUND; break;
+        case TOKEN_TYPE_RIGHT_ANGLE_BRACKET:
+        case TOKEN_TYPE_DRIGHT_ANGLE_BRACKET:
+        case TOKEN_TYPE_LEFT_ANGLE_BRACKET:
+        case TOKEN_TYPE_DLEFT_ANGLE_BRACKET:
+            red = tk.type;
+            while (get_next_token(&tk) == TOKEN_TYPE_NONE) {
+                argv[argc++] = tk.token;
+            }
+            argv[argc++] = (char*)0;
+            break;
     }
 
     if (command(argv, argc)) { // execute internal command
-        execute(argv, how); // execute external command
+        execute(argv, how, red); // execute external command
     }
 
     return 0;
@@ -210,12 +231,12 @@ int main(void)
 {
     char input[INPUT_SIZE];
 
-    printf("msh # ");
+    printf("lsh # ");
     while (fgets(input, INPUT_SIZE, stdin)) {
         if (interpret(input)) {
             break;
         }
-        printf("msh # ");
+        printf("lsh # ");
     }
     return 0;
 }
