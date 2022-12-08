@@ -129,31 +129,16 @@ int is_token_last(Tokenizer* tk) {
     return tk->_last;
 }
 
-int execute(char** argv, int how, int red) {
+int execute(char** argv, int how, int red, int pip) {
     pid_t pid;
     char** argv2;
     int red_fd;
 
-    // redirection
-    if (red) {
+    // redirection or pipe -> required rest of arguments
+    if (red || pip) {
         // get start address of arguments for redirection or pipe
         for (argv2 = argv; *argv2 != (char*)0; argv2++);
         argv2++;
-
-        // get fd
-        int oflag = 0;
-        switch (red) {
-        case TOKEN_TYPE_RIGHT_ANGLE_BRACKET:
-            oflag |= O_WRONLY | O_CREAT | O_TRUNC; break;
-        case TOKEN_TYPE_DRIGHT_ANGLE_BRACKET:
-            oflag |= O_WRONLY | O_CREAT | O_APPEND; break;
-        case TOKEN_TYPE_LEFT_ANGLE_BRACKET:
-            oflag |= O_RDONLY; break;
-        }
-        if ((red_fd = open(argv2[0], oflag, 0664)) < 0) {
-            perror("error");
-            return -1;
-        }
     }
 
     if ((pid = fork()) < 0) {
@@ -161,9 +146,53 @@ int execute(char** argv, int how, int red) {
         return -1;
     } else if (pid == 0) {
         /* child process */
-        if (red) { // duplicate red_fd to stdout or stdin
-            (red == TOKEN_TYPE_LEFT_ANGLE_BRACKET) ? dup2(red_fd, 0) : dup2(red_fd, 1);
+        if (red) { // redirection
+            int oflag = 0;
+            switch (red) {
+            case TOKEN_TYPE_RIGHT_ANGLE_BRACKET:
+                oflag |= O_WRONLY | O_CREAT | O_TRUNC; break;
+            case TOKEN_TYPE_DRIGHT_ANGLE_BRACKET:
+                oflag |= O_WRONLY | O_CREAT | O_APPEND; break;
+            case TOKEN_TYPE_LEFT_ANGLE_BRACKET:
+                oflag |= O_RDONLY; break;
+            }
+
+            int red_fd;
+            if ((red_fd = open(argv2[0], oflag, 0664)) < 0) { // open file
+                perror("error");
+                exit(1);
+            }
+
+            if (red == TOKEN_TYPE_LEFT_ANGLE_BRACKET) {
+                dup2(red_fd, 0); // file -> stdin (< redirection)
+            } else {
+                dup2(red_fd, 1); // file -> stdout (>, >> redirection)
+            }
+
             close(red_fd);
+        }
+
+        if (pip) { // pipe
+            int pip_fd[2];
+            if (pipe(pip_fd) == -1) { // create pipe
+                perror("pipe error");
+                exit(1);
+            }
+
+            if ((pid = fork()) < 0) { // create new process
+                perror("fork error");
+                exit(1);
+            } else if (pid == 0) {
+                /* child process of pipe */
+                close(pip_fd[1]); // close pipe for write
+                dup2(pip_fd[0], 0); // read pipe -> stdin
+                execvp(*argv2, argv2);
+                fprintf(stderr, "pipe error: command not found\n");
+                exit(127);
+            }
+            
+            close(pip_fd[0]); // close pip for read
+            dup2(pip_fd[1], 1); // write pipe -> stdout
         }
         execvp(*argv, argv);
         fprintf(stderr, "error: command not found\n");
@@ -220,6 +249,7 @@ int interpret(char* input) {
     int argc = 0;
     int how = HOW_FOREGROUND;
     int red = 0;
+    int pip = 0;
 
     while (get_next_token(&tk) == TOKEN_TYPE_NONE) {
         argv[argc++] = tk.token;
@@ -237,11 +267,18 @@ int interpret(char* input) {
                 argv[argc++] = tk.token;
             }
             argv[argc++] = (char*)0;
-            break;
+        case TOKEN_TYPE_PIPE:
+            pip = tk.type;
+        default:
+            while (get_next_token(&tk) == TOKEN_TYPE_NONE) {
+                argv[argc++] = tk.token;
+            }
+            argv[argc++] = (char*)0;
+
     }
 
     if (command(argv, argc)) { // execute internal command
-        execute(argv, how, red); // execute external command
+        execute(argv, how, red, pip); // execute external command
     }
 
     return 0;
