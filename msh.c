@@ -27,7 +27,7 @@ typedef struct Tokenizer {
     char* token;
     int index;
     int type;
-    int _last;
+    int last;
     char* _ptr;
 } Tokenizer;
 
@@ -53,10 +53,10 @@ int init_tokenizer(Tokenizer* tk, char* target) {
     };
     tk->_ptr = target;
 
-    // if first token is null charactor, set _last field TRUE
-    tk->_last = FALSE;
+    // if first token is null charactor, set last field TRUE
+    tk->last = FALSE;
     if (*tk->_ptr == '\0') {
-        tk->_last = TRUE;
+        tk->last = TRUE;
     }
 }
 
@@ -91,7 +91,7 @@ int get_next_token(Tokenizer* tk) {
     char* ptr = tk->_ptr;
     
     // if there is no next token return 0
-    if (tk->_last == TRUE) {
+    if (tk->last == TRUE) {
         return -1;
     }
 
@@ -101,7 +101,7 @@ int get_next_token(Tokenizer* tk) {
     // get end position of token
     while (!_is_token_seperator(*ptr)) {
         if (*ptr == '\0') {
-            tk->_last = TRUE;
+            tk->last = TRUE;
             break;
         }
         ptr++;
@@ -112,21 +112,17 @@ int get_next_token(Tokenizer* tk) {
     tk->index++; // increase index
 
     // get effective start position of next token
-    if (tk->_last == FALSE) {
+    if (tk->last == FALSE) {
         while (_is_token_seperator(*ptr)) {
             ptr++;
         }
         if (*ptr == '\0') {
-            tk->_last = TRUE;
+            tk->last = TRUE;
         }
     }
     tk->_ptr = ptr;
 
     return tk->type;
-}
-
-int is_token_last(Tokenizer* tk) {
-    return tk->_last;
 }
 
 int execute(char** argv, int how, int red, int pip) {
@@ -243,7 +239,7 @@ int command(char** argv, int argc) {
 int interpret(char* input) {
     Tokenizer tk;
     init_tokenizer(&tk, input);
-    if (is_token_last(&tk)) return 0;
+    if (tk.last) return 0;
 
     char* argv[1024];
     int argc = 0;
