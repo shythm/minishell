@@ -40,13 +40,33 @@ argv[argc++] = (char*)0;
 
 ### 1. `cd` Command
 * `cd` 기능은 외부 바이너리로 실행할 수 있는 명령어가 아니기 때문에 `command` 함수에서 직접 구현하여 해당 명령어를 수행함.
+
+#### 구현 방법
 * `chdir` 함수를 사용하여 해당 작업 공간(working directory)를 변경함. 이때 인자로 경로를 줄 수 있는데 사용자로부터 입력받은 경로를 그대로 전달해준다([상대 경로인지 절대 경로인지는 중요하지 않음](https://stackoverflow.com/questions/4998530/can-chdir-accept-relative-paths)).
 
+#### 실행 결과 화면
 ![cd screenshot](./images/cd.png)
 
 ### 2. `type` Command
+* `type` 기능은 윈도우 운영체제에서 사용하는 [텍스트 파일 읽기 명령어](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/type)임
+* `type` 기능 또한 `command` 함수에서 직접 구현하여 해당 명령어 수행
+
+#### 구현 방법
+* `fgets`, `fputs` 표준 파일 입출력 기능을 이용하여 해당 기능 구현
+
+#### 실행 결과 화면
+![type screenshot](./images/type.png)
 
 ### 3. `>` Redirection
+* `>` 리다이렉션은 해당 명령어의 stdout fd(file descriptor)를 특정 파일 fd로 바꾸어, stdout으로 출력된 결과가 파일로 저장되도록 하는 명령어이다.
+
+#### 구현 방법
+1. `Tokenizer`로 `>` 토큰을 확인하고 파일 이름을 구한 후 `execute` 단계에서 리다이렉션이 있음을 매개 변수로 알려준다.
+2. `execute` 단계에서 `fork` 함수를 수행하여 새 프로세스를 만든 후, 리다이렉션 할 파일의 fd를 `open` 함수를 이용해 구한다. 이때 파일에 내용을 기록해야 하므로 `O_WRONLY | O_CREAT | O_TRUNC` flag를 사용한다.
+3. 그 후, `dup2` 함수를 이용하여 stdout fd의 내용을 위에서 구한 파일의 fd 내용으로 복제한다.
+
+#### 실행 결과 화면
+![right screenshot](./images/right.png)
 
 ### 4. `<` Redirection
 
