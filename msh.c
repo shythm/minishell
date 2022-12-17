@@ -166,31 +166,38 @@ int execute(char** argv, int how, int red, int pip) {
             }
 
             close(red_fd);
-        }
-
-        if (pip) { // pipe
+            execvp(*argv, argv);
+        } else if (pip) { // pipe
             int pip_fd[2];
+            pid_t pip_pid;
             if (pipe(pip_fd) == -1) { // create pipe
                 perror("pipe error");
                 exit(1);
             }
 
-            if ((pid = fork()) < 0) { // create new process
+            if ((pip_pid = fork()) < 0) { // create new process
                 perror("fork error");
                 exit(1);
-            } else if (pid == 0) {
+            } else if (pip_pid == 0) {
                 /* child process of pipe */
-                close(pip_fd[1]); // close pipe for write
-                dup2(pip_fd[0], 0); // read pipe -> stdin
-                execvp(*argv2, argv2);
+                close(pip_fd[0]); // close pipe for read
+                dup2(pip_fd[1], 1); // write pipe -> stdout
+                execvp(*argv, argv);
                 fprintf(stderr, "pipe error: command not found\n");
                 exit(127);
             }
             
-            close(pip_fd[0]); // close pip for read
-            dup2(pip_fd[1], 1); // write pipe -> stdout
+            while (waitpid(pip_pid, NULL, 0) < 0) { // wait
+                if (errno != EINTR) return -1;
+            }
+
+            close(pip_fd[1]); // close pip for write
+            dup2(pip_fd[0], 0); // read pipe -> stdin
+            execvp(*argv2, argv2);
+        } else {
+            execvp(*argv, argv);
         }
-        execvp(*argv, argv);
+        
         fprintf(stderr, "error: command not found\n");
         exit(127);
     }
@@ -200,8 +207,9 @@ int execute(char** argv, int how, int red, int pip) {
         printf("background execution (PID: %d)\n", pid);
         return 0;
     }
-    while (waitpid(pid, NULL, 0) < 0) // foreground execution
+    while (waitpid(pid, NULL, 0) < 0) { // foreground execution
         if (errno != EINTR) return -1;
+    }
 
     return 0;
 }
@@ -284,7 +292,7 @@ int main(void)
 {
     char* buffer = "";
 
-    while (buffer) {
+    for (;;) {
         buffer = readline("lsh # ");
         if (interpret(buffer)) {
             break;
