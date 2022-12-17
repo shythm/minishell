@@ -2,7 +2,7 @@
 * 2019920037 컴퓨터과학부 이성호
 
 ## Tokenizer
-* 기존의 `get_token` 함수의 기능을 단계벌로 추상화하여 새로운 Tokenizer를 만들었음.
+* 기존의 `get_token` 함수의 기능을 단계별로 추상화하여 새로운 Tokenizer를 만들었음.
 * `Tokenizer` 구조체에 토큰 분리에 필요한 필드들과 다음 토큰을 가리키는 `char*` 필드를 담아 구조화 함.
 ```c
 typedef struct Tokenizer {
