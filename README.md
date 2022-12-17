@@ -63,21 +63,59 @@ argv[argc++] = (char*)0;
 #### 구현 방법
 1. `Tokenizer`로 `>` 토큰을 확인하고 파일 이름을 구한 후 `execute` 단계에서 리다이렉션이 있음을 매개 변수로 알려준다.
 2. `execute` 단계에서 `fork` 함수를 수행하여 새 프로세스를 만든 후, 리다이렉션 할 파일의 fd를 `open` 함수를 이용해 구한다. 이때 파일에 내용을 기록해야 하므로 `O_WRONLY | O_CREAT | O_TRUNC` flag를 사용한다.
-3. 그 후, `dup2` 함수를 이용하여 stdout fd의 내용을 위에서 구한 파일의 fd 내용으로 복제한다.
+3. 그 후, `dup2` 함수를 이용하여 stdout(1) fd의 내용을 위에서 구한 파일의 fd 내용으로 복제한다.
 
 #### 실행 결과 화면
 ![right screenshot](./images/right.png)
 
 ### 4. `<` Redirection
+* `<` 리다이렉션은 해당 명령어의 stdin fd(file descriptor)를 특정 파일 fd로 바꾸어, 파일에 있는 내용을 해당 명령어가 읽어 수행할 수 있도록 해준다.
+
+#### 구현 방법
+1. `Tokenizer`로 `>` 토큰 왼쪽에 있는 명령어와 오른쪽에 있는 파일 이름을 구한다.
+2. `execute` 단계에서 `fork` 함수를 수행하여 새 프로세스를 만든 후, 리다이렉션 할 파일의 fd를 `open` 함수를 이용해 가져온다. 이때 파일의 내용을 읽어야 하므로 `O_RDONLY` flag를 사용한다.
+3. 그 후, `dup2` 함수를 이용하여 stdin fd(0)의 내용을 위에서 구한 파일의 fd 내용으로 복제한다.
+
+#### 실행 화면
+![left screenshot](./images/left.png)
 
 ### 5. Tab Autocomplete
+* Tab 키를 누르면 현재 디렉터리에 있는 파일 및 디렉터리 이름을 자동완성 해주는 기능이다.
+
+#### 구현 방법
+1. 개발 환경에서 `sudo apt install libreadline-dev`를 입력하여 `readline` 라이브러리를 설치한다.
+2. 아래와 같이 기존의 사용자로 입력받는 부분을 readline 라이브러리로 바꿔준다. 
+```c
+#include <readline/readline.h>
+
+int main() {
+    char* buffer = "";
+
+    while (buffer) {
+        buffer = readline("lsh # ");
+        if (interpret(buffer)) {
+            break;
+        }
+        free(buffer);
+    }
+
+    return 0;
+}
+```
+3. 컴파일 할 때 `-lreadline` 옵션을 주어 수행한다. (예: `gcc msh.c -o msh -lreadline`)
+
+#### 실행 화면
+![autocomplete screenshot](./images/autocomplete.png)
 
 ### 6. Pipe
+* `|` 좌우에 있는 명령어 사이에 스트림을 형성하는 기능이다.
+* pipe 왼쪽에 있는 프로세스의 stdout이 오른쪽에 있는 프로세스의 stdin으로 연결된다.
 
+#### 구현 방법
+1. `|` 좌우에 있는 명령어를 `Tokenizer`를 이용해 파싱한다.
+2. `execute` 단계에서 `fork` 함수를 수행하여 새 프로세스를 만든 후 `pipe` 함수를 이용하여 파이프 파일을 만든다.
+3. 새 프로세스(부모 프로세스)에서 또 `fork` 함수를 호출하여 자식 프로세스를 만든 뒤, `dup2` 함수를 이용하여 stdout을 1번 pipe로 바꿔준다. 그리고 나서 `exec` 함수를 이용하여 왼쪽 명령어를 수행한다.
+4. 부모 프로세스에서는 자식 프로세스가 종료될 때까지 기다렸다가 `dup2` 함수를 이용하여 stdin을 0번 pipe로 바꿔준다. 그리고 오른쪽 명령어를 수행한다.
 
-
-어려웠던 점
-
-토큰 분리하기
-전역 변수의 남용을 막고 파싱 기능들을 적절히 분리함
-Tokenizer라는 구조체 안에서 파싱에 필요한 모든 변수들을 보관하고, 쉽게 초기화할 수 있도록 함
+#### 실행 화면
+![pipe screenshot](./images/pipe.png)
