@@ -41,7 +41,7 @@ int _is_token_seperator(char ch) {
     return FALSE;
 }
 
-int init_tokenizer(Tokenizer* tk, char* target) {
+void init_tokenizer(Tokenizer* tk, char* target) {
     // initialize fields
     tk->token = NULL;
     tk->index = -1;
